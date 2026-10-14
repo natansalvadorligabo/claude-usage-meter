@@ -1,0 +1,17 @@
+{
+  "name": "claude-usage-meter",
+  "owner": {
+    "name": "natansalvadorligabo",
+    "url": "https://github.com/natansalvadorligabo"
+  },
+  "metadata": {
+    "description": "Context, session and weekly usage on the Claude Code footer, with a daily budget."
+  },
+  "plugins": [
+    {
+      "name": "usage-meter",
+      "source": "./",
+      "description": "Context, 5-hour session and weekly usage on the footer row, with a daily budget and a settings pane."
+    }
+  ]
+}
