@@ -3,9 +3,7 @@
 A Claude Code mod (installed like a plugin) that shows context, 5-hour session and weekly usage on the
 footer row, plus a daily budget that tells you whether today's pace fits what is left of the week.
 
-[![The meter on the footer: usage climbs while the agent works, hovering shows the labels, the settings pane switches charts and language, and the daily budget turns from on track to over](docs/media/demo.gif)](docs/media/demo.mp4)
-
-▶️ **[Watch it in full quality](docs/media/demo.mp4)**
+![The meter on the footer: usage climbs while the agent works, hovering shows the labels, the settings pane switches charts and language, and the daily budget turns from on track to over](docs/media/demo.gif)
 
 ## What it shows
 
