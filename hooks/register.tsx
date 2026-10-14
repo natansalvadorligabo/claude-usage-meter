@@ -474,7 +474,7 @@ export const register: Register = on => {
       <Box flexDirection="column">
         <Box columnGap={1}>
           <Box width={18} flexShrink={0}>
-            <Text weight="bold">{title}</Text>
+            <Text bold>{title}</Text>
           </Box>
           {headerControl}
         </Box>
@@ -509,7 +509,7 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" borderStyle="round" paddingX={1} rowGap={1}>
-        <Text weight="bold">{messages.title}</Text>
+        <Text bold>{messages.title}</Text>
         {section(messages.general, [
           row(messages.rows.language, LANGUAGES.map(language =>
             choice(`language-${language}`, messages.languages[language], settings.language === language, setGeneral({ language })))),
