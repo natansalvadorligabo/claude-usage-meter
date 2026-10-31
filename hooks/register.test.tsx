@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
-import type { On } from 'claude-code'
+import type { On, SessionMessage } from 'claude-code'
 
 const SURFACES = ['terminal', 'desktop'] as const
 const PANE_ID = 'usage-meter-settings'
@@ -12,6 +12,8 @@ const PANE_PROPS = {
   scroll: { offset: 0, bodyRows: 40 },
   view: {},
 } as const
+
+const HOUR_MS = 60 * 60 * 1000
 
 function inCalendarDays(days: number): string {
   const date = new Date()
@@ -260,4 +262,53 @@ test('a half-written shared file is ignored until a whole one replaces it', asyn
 
   await measureWeekly($, 45, inCalendarDays(2))
   expect(JSON.parse(files.get(sharedPath) ?? '{}').weekly.percent).toBe(45)
+})
+
+test('a compaction shrinks the context before the next response arrives', async ($, on) => {
+  answerEngine(on)
+  const summary: SessionMessage = { role: 'user', text: 'summary', toolUses: [], toolResults: [] }
+  on('session.compact', () => ({
+    messages: [summary],
+    tokensBefore: 84000,
+    tokensAfter: 8000,
+  }))
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await measureWeekly($, 40, inCalendarDays(2))
+
+  await $.session.compact({ trigger: 'manual', messages: [summary] })
+
+  const text = await footerText($, 'terminal')
+  expect(text).toMatch(/^4% · 72%/)
+})
+
+test('an idle session drops a limit once its window has reset', async ($, on) => {
+  const { clock } = answerEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const inOneHour = new Date(Date.now() + HOUR_MS).toISOString()
+  await $.session.measure({
+    context: { window: 200000, tokens: 84000, percent: 42 },
+    rateLimits: [
+      { kind: 'five_hour', percentUsed: 72.4, resetsAt: inOneHour },
+      { kind: 'seven_day', percentUsed: 40, resetsAt: inCalendarDays(2) },
+    ],
+    changed: ['context', 'rateLimits'],
+  })
+
+  await clock.advance(2 * HOUR_MS)
+
+  const text = await footerText($, 'terminal')
+  expect(text).not.toMatch(/72%/)
+  expect(text).toMatch(/40%/)
+})
+
+test('a compaction computed ahead of time leaves the context as it is', async ($, on) => {
+  answerEngine(on)
+  const summary: SessionMessage = { role: 'user', text: 'summary', toolUses: [], toolResults: [] }
+  on('session.compact', () => ({ messages: [summary], tokensBefore: 84000 }))
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await measureWeekly($, 40, inCalendarDays(2))
+
+  await $.session.compact({ trigger: 'precompute', messages: [summary] })
+
+  expect(await footerText($, 'terminal')).toMatch(/^42% · 72%/)
 })
