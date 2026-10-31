@@ -43,7 +43,7 @@ function answerEngine(on: On, opened: string[] = []) {
     store.set(e.key, e.value)
     return { value: undefined }
   })
-  return { files, clock }
+  return { files, clock, store }
 }
 
 async function measureWeekly($: Engine, weeklyPercent: number, resetsAt: string) {
@@ -260,4 +260,57 @@ test('a half-written shared file is ignored until a whole one replaces it', asyn
 
   await measureWeekly($, 45, inCalendarDays(2))
   expect(JSON.parse(files.get(sharedPath) ?? '{}').weekly.percent).toBe(45)
+})
+
+test('a chart picked in the pane survives a new session', async ($, on) => {
+  answerEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await measureWeekly($, 40, inCalendarDays(2))
+  const pane = await $.ui.mount({ plugin: 'usage-meter', surface: 'terminal', component: 'Pane', requestId: PANE_ID, props: PANE_PROPS })
+  await pane.press({ key: 'context-chart-dots' })
+  await pane.press({ key: 'context-chart-bar' })
+  await pane.press({ key: 'session-chart-dots' })
+  await pane.press({ key: 'labels-always' })
+  await pane.unmount()
+
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await measureWeekly($, 40, inCalendarDays(2))
+  const text = await footerText($, 'terminal')
+  expect(text).toMatch(/█+░+ 42%/)
+  expect(text).toMatch(/●+○+ 72%/)
+  expect(text).toMatch(/Context:/)
+})
+
+test('a change in one terminal keeps what another terminal saved meanwhile', async ($, on) => {
+  const { store } = answerEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await measureWeekly($, 40, inCalendarDays(2))
+
+  // Terminal A, started at the same time, picks bars for the context and saves its whole config.
+  const metric = { isVisible: true, chart: 'none', showPercent: true, showResetTime: true }
+  store.set('settings.v2', {
+    language: 'en', labels: 'never', colors: 'on', countWeekends: true,
+    metrics: { context: { ...metric, chart: 'bar' }, session: metric, weekly: metric, dailyBudget: metric },
+  })
+
+  // This terminal (B) then changes only the labels.
+  const pane = await $.ui.mount({ plugin: 'usage-meter', surface: 'terminal', component: 'Pane', requestId: PANE_ID, props: PANE_PROPS })
+  await pane.press({ key: 'labels-always' })
+  await pane.unmount()
+
+  const saved = store.get('settings.v2') as { labels: string; metrics: { context: { chart: string } } }
+  expect(saved.labels).toBe('always')
+  expect(saved.metrics.context.chart).toBe('bar')
+})
+
+test('two quick presses in one terminal both end up saved', async ($, on) => {
+  const { store } = answerEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const pane = await $.ui.mount({ plugin: 'usage-meter', surface: 'terminal', component: 'Pane', requestId: PANE_ID, props: PANE_PROPS })
+  await Promise.all([pane.press({ key: 'context-chart-bar' }), pane.press({ key: 'session-chart-dots' })])
+  await pane.unmount()
+
+  const saved = store.get('settings.v2') as { metrics: { context: { chart: string }; session: { chart: string } } }
+  expect(saved.metrics.context.chart).toBe('bar')
+  expect(saved.metrics.session.chart).toBe('dots')
 })

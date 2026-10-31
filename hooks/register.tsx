@@ -370,9 +370,21 @@ function withMetric(current: UsageMeterConfig, id: MetricId, change: Partial<Met
   return hasVisibleMetric ? changed : current
 }
 
+// Every open terminal writes the same settings: a change applies to the saved ones, so it never undoes another terminal's choice (#1).
 async function changeConfig($: EngineInterface, change: (current: UsageMeterConfig) => UsageMeterConfig) {
-  await update($, config, current => change(current ?? DEFAULT_CONFIG))
-  await $.store.set(SETTINGS_KEY, await read($, config))
+  const changed = change(mergeWithDefaults(await $.store.get(SETTINGS_KEY)))
+  // Saved first, so a refused write never leaves the footer showing a choice that was not kept.
+  await $.store.set(SETTINGS_KEY, changed)
+  await update($, config, () => changed)
+}
+
+// Module state despite the no-globals rule: the host lets a hook pass $ only to functions declared at the top of the file.
+let pendingConfigChanges: Promise<void> = Promise.resolve()
+
+// Two quick presses must not read the same saved settings, so this terminal saves its changes one at a time.
+function queueConfigChange($: EngineInterface, change: (current: UsageMeterConfig) => UsageMeterConfig): Promise<void> {
+  pendingConfigChanges = pendingConfigChanges.catch(() => undefined).then(() => changeConfig($, change))
+  return pendingConfigChanges
 }
 
 async function recordUsage($: EngineInterface, change: (current: UsageSnapshot) => UsageSnapshot) {
@@ -454,8 +466,8 @@ export const register: Register = on => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const settings = await read($, config)
     const messages = MESSAGES[settings.language]
-    const setGeneral = (change: Partial<UsageMeterConfig>) => () => changeConfig($, current => ({ ...current, ...change }))
-    const setMetric = (id: MetricId, change: Partial<MetricSettings>) => () => changeConfig($, current => withMetric(current, id, change))
+    const setGeneral = (change: Partial<UsageMeterConfig>) => () => queueConfigChange($, current => ({ ...current, ...change }))
+    const setMetric = (id: MetricId, change: Partial<MetricSettings>) => () => queueConfigChange($, current => withMetric(current, id, change))
 
     const choice = (key: string, label: string, isSelected: boolean, onPress: () => void) => (
       <Button key={key} label={label} variant={isSelected ? 'primary' : undefined} dimColor={!isSelected} onPress={onPress} />
@@ -521,7 +533,7 @@ export const register: Register = on => {
         {METRIC_ORDER.map(metricSection)}
         <Box columnGap={1}>
           <Button key="close" variant="primary" role="dismiss" label={messages.done} onPress={() => void $.ui.close({ id: PANE })} />
-          <Button key="restore" dimColor label={messages.restoreDefaults} onPress={() => changeConfig($, current => ({ ...DEFAULT_CONFIG, language: current.language }))} />
+          <Button key="restore" dimColor label={messages.restoreDefaults} onPress={() => queueConfigChange($, current => ({ ...DEFAULT_CONFIG, language: current.language }))} />
         </Box>
       </Box>
     )
