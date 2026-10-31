@@ -302,3 +302,15 @@ test('a change in one terminal keeps what another terminal saved meanwhile', asy
   expect(saved.labels).toBe('always')
   expect(saved.metrics.context.chart).toBe('bar')
 })
+
+test('two quick presses in one terminal both end up saved', async ($, on) => {
+  const { store } = answerEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const pane = await $.ui.mount({ plugin: 'usage-meter', surface: 'terminal', component: 'Pane', requestId: PANE_ID, props: PANE_PROPS })
+  await Promise.all([pane.press({ key: 'context-chart-bar' }), pane.press({ key: 'session-chart-dots' })])
+  await pane.unmount()
+
+  const saved = store.get('settings.v2') as { metrics: { context: { chart: string }; session: { chart: string } } }
+  expect(saved.metrics.context.chart).toBe('bar')
+  expect(saved.metrics.session.chart).toBe('dots')
+})
