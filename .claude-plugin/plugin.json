@@ -1,6 +1,6 @@
 {
   "name": "usage-meter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Context, session and weekly usage on the footer row, configurable from a pane",
   "author": { "name": "Natan Salvador Ligabo" },
   "license": "MIT",
