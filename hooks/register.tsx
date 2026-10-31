@@ -213,15 +213,17 @@ function withoutExpiredReset(reading: UsageReading, now: number): UsageReading {
   return reading.resetsAt && Date.parse(reading.resetsAt) <= now ? {} : reading
 }
 
-async function adoptSharedLimits($: EngineInterface) {
+// An idle terminal hears of no new limits, so it takes a newer one from the shared file and drops any whose window has reset.
+async function syncLimits($: EngineInterface) {
   const shared = await readSharedLimits($)
-  if (!shared) return
   const now = await $.clock.now()
-  await recordUsage($, current => shared.measuredAt <= current.limitsMeasuredAt ? current : {
-    ...current,
-    session: withoutExpiredReset(shared.session, now),
-    weekly: withoutExpiredReset(shared.weekly, now),
-    limitsMeasuredAt: shared.measuredAt,
+  await recordUsage($, current => {
+    const latest = shared && shared.measuredAt > current.limitsMeasuredAt
+      ? { ...current, session: shared.session, weekly: shared.weekly, limitsMeasuredAt: shared.measuredAt }
+      : current
+    const session = withoutExpiredReset(latest.session, now)
+    const weekly = withoutExpiredReset(latest.weekly, now)
+    return session === latest.session && weekly === latest.weekly ? latest : { ...latest, session, weekly }
   })
 }
 
@@ -409,8 +411,8 @@ export const register: Register = on => {
     await update($, config, () => settings)
     const current = await $.session.usage()
     await recordUsage($, () => toSnapshot(current.context, current.rateLimits, 0))
-    await adoptSharedLimits($)
-    $.clock.every(SHARED_LIMITS_SYNC_MS, () => void adoptSharedLimits($))
+    await syncLimits($)
+    $.clock.every(SHARED_LIMITS_SYNC_MS, () => void syncLimits($))
     await $.command.register({ name: 'usage-meter', description: MESSAGES[settings.language].commandDescription })
     return next(e)
   })
@@ -425,6 +427,19 @@ export const register: Register = on => {
     publishing = publishing.then(() => publishLimits($, snapshot)).catch(() => undefined)
     await publishing
     return next(e)
+  })
+
+  // A compaction raises no measurement until the next response, so the context is worked out from its own count.
+  on('session.compact', async ($, e, next) => {
+    const compaction = await next(e)
+    if (e.agentId || e.trigger === 'precompute' || !compaction.messages) return compaction
+    const { tokensAfter } = compaction
+    const { window } = (await $.session.usage()).context
+    const context: UsageReading = typeof tokensAfter === 'number' && window > 0
+      ? { percent: Math.min(100, Math.round((tokensAfter / window) * 100)) }
+      : {}
+    await recordUsage($, current => ({ ...current, context }))
+    return compaction
   })
 
   on('command.run', { command: 'usage-meter' }, async $ => {
