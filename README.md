@@ -51,15 +51,15 @@ To try a local clone instead: `claude --plugin-dir /path/to/claude-usage-meter`.
 ## Develop
 
 ```sh
-claude plugin validate .
-claude plugin test .
-tsc -p .            # once Claude Code has loaded the mod and written .claude-plugin/types/
+sh scripts/check.sh   # validate, test, and tsc once Claude Code has loaded the mod and written .claude-plugin/types/
 ```
 
 ## Limitations
 
 - Session and weekly limits only appear on subscription accounts.
-- Glyphs such as `◔ ◑ ◕` depend on the terminal font.
+- The pie chart (`◔ ◑ ◕`) needs a font that has those glyphs, such as Cascadia Mono or DejaVu Sans Mono;
+  Consolas, Lucida Console and Courier New lack them, and a terminal with no font fallback draws boxes instead.
+  A mod cannot tell which glyphs the font has, so the settings pane says so next to the pie once you pick it.
 
 ## License
 

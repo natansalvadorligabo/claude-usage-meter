@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
-import type { Engine } from 'claude-code/testing'
+import type { Engine, Mounted } from 'claude-code/testing'
 import type { On, SessionMessage } from 'claude-code'
 
 const SURFACES = ['terminal', 'desktop'] as const
@@ -64,6 +64,11 @@ async function footerText($: Engine, surface: (typeof SURFACES)[number]): Promis
   const texts = await footer.findAll({ type: 'Text' })
   await footer.unmount()
   return texts.map(found => found.text ?? '').join('')
+}
+
+async function pieHints(pane: Mounted<(typeof SURFACES)[number], 'Pane'>): Promise<string[]> {
+  const hints = await pane.findAll({ type: 'Text', text: /Cascadia Mono/ })
+  return hints.map(hint => hint.text)
 }
 
 test('footer shows every metric and opens the settings pane on click', async ($, on) => {
@@ -364,6 +369,29 @@ test('a compaction computed ahead of time leaves the context as it is', async ($
   await $.session.compact({ trigger: 'precompute', messages: [summary] })
 
   expect(await footerText($, 'terminal')).toMatch(/^42% · 72%/)
+})
+
+test('picking the pie warns, in the pane language, that it needs a font with the pie glyphs', async ($, on) => {
+  answerEngine(on)
+  await measureWeekly($, 40, inCalendarDays(2))
+
+  for (const surface of SURFACES) {
+    const pane = await $.ui.mount({ plugin: 'usage-meter', surface, component: 'Pane', requestId: PANE_ID, props: PANE_PROPS })
+    expect(await pieHints(pane)).toEqual([])
+
+    await pane.press({ key: 'weekly-chart-pie' })
+    expect(await pieHints(pane)).toEqual(['Needs a font with pie glyphs, such as Cascadia Mono'])
+
+    await pane.press({ key: 'language-pt-BR' })
+    expect(await pieHints(pane)).toEqual(['Requer uma fonte com os glifos da pizza, como Cascadia Mono'])
+
+    await pane.press({ key: 'weekly-chart-bar' })
+    expect(await pieHints(pane)).toEqual([])
+
+    await pane.press({ key: 'restore' })
+    await pane.press({ key: 'language-en' })
+    await pane.unmount()
+  }
 })
 
 type DrawnElement = { type: string; hover?: Record<string, unknown>; children?: unknown[] }
