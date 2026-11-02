@@ -7,7 +7,7 @@ Claude Code mod (installed like a plugin, distributed through this repo's own ma
 Every change reaches `main` through a pull request, never a direct commit:
 
 1. Branch off an up-to-date `main` (`fix/…`, `feat/…`, `chore/…`).
-2. Make the change with tests; `claude plugin validate .` and `claude plugin test .` both pass.
+2. Make the change with tests; `sh scripts/check.sh` passes (CI runs the same script on every PR).
 3. Bump `version` in `.claude-plugin/plugin.json` in the same branch, as semver: patch for fixes, minor for new metrics or settings, major when saved settings stop loading.
 4. Open the PR with the `pr` skill's template (Summary, Evidence with before/after, Merge Danger).
 
@@ -18,6 +18,7 @@ When two open PRs both append tests to the end of `hooks/register.test.tsx`, the
 ## Commands
 
 ```sh
+sh scripts/check.sh        # validate, test, and tsc when .claude-plugin/types/ exists
 claude plugin validate .   # manifest and hooks.json
 claude plugin test .       # every *.test.tsx; there is no filter for a single test
 tsc -p .                   # needs .claude-plugin/types/, written once Claude Code has loaded the mod
