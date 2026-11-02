@@ -33,6 +33,6 @@ All code is `hooks/register.tsx`, loaded through `hooks/hooks.json` as a functio
 - **Several terminals:** limits belong to the account, so each terminal publishes its newest reading to `~/.claude/usage-meter/latest-limits.json` (under `CLAUDE_CONFIG_DIR` when set) and every 10 s `syncLimits` adopts a newer one and drops readings past their `resetsAt`. A writer never replaces a newer `measuredAt`.
 - **Settings:** stored under `settings.v2` in `$.store`, which all terminals share. Pane changes read the saved value, apply the change and write it back, queued per terminal, so one terminal never undoes another's choice. Changing the shape needs a new key or a migration in `mergeWithDefaults`.
 - **Daily budget:** `dayBaseline` in the store records the weekly percent at the start of each local day.
-- **UI:** `ui.render` for `SessionMode` draws the footer; for `Pane` the settings. Text lives in `MESSAGES` (`en`, `pt-BR`); add both.
+- **UI:** `ui.render` for `SessionMode` draws the footer; for `Pane` the settings. Text lives in `MESSAGES` (`en`, `pt-BR`); add both. Hover styles rely on the engine order in `docs/adr/0003`; check them with `scripts/hover-check.sh`.
 
 Tests use `claude-code/testing`: `answerEngine` stubs the store, files and clock, so time-based behaviour is tested with `clock.advance`.
