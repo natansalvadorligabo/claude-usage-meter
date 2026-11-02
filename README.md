@@ -59,7 +59,6 @@ tsc -p .            # once Claude Code has loaded the mod and written .claude-pl
 ## Limitations
 
 - Session and weekly limits only appear on subscription accounts.
-- The hover background is `#0c0c0c` (Windows Terminal's Campbell scheme).
 - Glyphs such as `◔ ◑ ◕` depend on the terminal font.
 
 ## License

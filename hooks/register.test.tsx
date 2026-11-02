@@ -365,3 +365,32 @@ test('a compaction computed ahead of time leaves the context as it is', async ($
 
   expect(await footerText($, 'terminal')).toMatch(/^42% · 72%/)
 })
+
+type DrawnElement = { type: string; hover?: Record<string, unknown>; children?: unknown[] }
+
+// The hover styles of every Text and Button drawn beneath the given children, read from the descriptions the surface is handed.
+function textHovers(children: unknown[]): Record<string, unknown>[] {
+  return children.flatMap(child => {
+    if (typeof child !== 'object' || child === null) return []
+    const element = child as DrawnElement
+    const own = element.hover && (element.type === 'Text' || element.type === 'Button') ? [element.hover] : []
+    return [...own, ...textHovers(element.children ?? [])]
+  })
+}
+
+test('hovering the footer keeps the terminal background and never inverts', async ($, on) => {
+  answerEngine(on)
+  await measureWeekly($, 40, inCalendarDays(2))
+
+  for (const surface of SURFACES) {
+    const footer = await $.ui.mount({ plugin: 'usage-meter', surface, component: 'SessionMode', props: { modes: [] } })
+    const section = await footer.find({ type: 'Box', key: 'usage-meter-section' })
+    await footer.unmount()
+    const hovers = textHovers(section?.children ?? [])
+    expect(hovers.length).toBeGreaterThan(0)
+    for (const hover of hovers) {
+      expect(hover.backgroundColor).toBeUndefined()
+      expect(hover.inverse).toBe(false)
+    }
+  }
+})
