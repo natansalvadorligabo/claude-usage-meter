@@ -60,7 +60,9 @@ tsc -p .            # once Claude Code has loaded the mod and written .claude-pl
 
 - Session and weekly limits only appear on subscription accounts.
 - The hover background is `#0c0c0c` (Windows Terminal's Campbell scheme).
-- Glyphs such as `◔ ◑ ◕` depend on the terminal font.
+- The pie chart (`◔ ◑ ◕`) needs a font that has those glyphs, such as Cascadia Mono or DejaVu Sans Mono;
+  Consolas, Lucida Console and Courier New lack them, and a terminal with no font fallback draws boxes instead.
+  A mod cannot tell which glyphs the font has, so the settings pane says so next to the pie once you pick it.
 
 ## License
 

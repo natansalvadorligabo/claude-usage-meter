@@ -1,5 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
-import type { Engine } from 'claude-code/testing'
+import type { Engine, Mounted } from 'claude-code/testing'
 import type { On, SessionMessage } from 'claude-code'
 
 const SURFACES = ['terminal', 'desktop'] as const
@@ -364,4 +364,28 @@ test('a compaction computed ahead of time leaves the context as it is', async ($
   await $.session.compact({ trigger: 'precompute', messages: [summary] })
 
   expect(await footerText($, 'terminal')).toMatch(/^42% · 72%/)
+})
+
+test('picking the pie warns, in the pane language, that it needs a font with the pie glyphs', async ($, on) => {
+  answerEngine(on)
+  await measureWeekly($, 40, inCalendarDays(2))
+  const pieHints = async (pane: Mounted<(typeof SURFACES)[number], 'Pane'>) => (await pane.findAll({ type: 'Text', text: /◔ ◑ ◕/ })).map(hint => hint.text)
+
+  for (const surface of SURFACES) {
+    const pane = await $.ui.mount({ plugin: 'usage-meter', surface, component: 'Pane', requestId: PANE_ID, props: PANE_PROPS })
+    expect(await pieHints(pane)).toEqual([])
+
+    await pane.press({ key: 'weekly-chart-pie' })
+    expect(await pieHints(pane)).toEqual(['Needs a font with ◔ ◑ ◕, such as Cascadia Mono'])
+
+    await pane.press({ key: 'language-pt-BR' })
+    expect(await pieHints(pane)).toEqual(['Requer uma fonte com ◔ ◑ ◕, como Cascadia Mono'])
+
+    await pane.press({ key: 'weekly-chart-bar' })
+    expect(await pieHints(pane)).toEqual([])
+
+    await pane.press({ key: 'restore' })
+    await pane.press({ key: 'language-en' })
+    await pane.unmount()
+  }
 })

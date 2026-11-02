@@ -63,6 +63,7 @@ type Messages = {
   metricNames: Record<MetricId, string>
   rows: { language: string; chart: string; percent: string; resetTime: string; labels: string; colors: string; weekends: string }
   charts: Record<ChartStyle, string>
+  pieHint: string
   labelModes: Record<LabelMode, string>
   colorModes: Record<ColorMode, string>
   languages: Record<Language, string>
@@ -87,6 +88,7 @@ const MESSAGES: Record<Language, Messages> = {
     metricNames: { context: 'Context', session: 'Session', weekly: 'Weekly', dailyBudget: 'Daily budget' },
     rows: { language: 'Language', chart: 'Chart', percent: 'Percent', resetTime: 'Reset time', labels: 'Labels', colors: 'Colors', weekends: 'Weekends' },
     charts: { none: 'Number', bar: 'Bar', dots: 'Dots', level: 'Level', pie: 'Pie' },
+    pieHint: 'Needs a font with ◔ ◑ ◕, such as Cascadia Mono',
     labelModes: { always: 'Show', hover: 'On hover', never: 'Hide' },
     colorModes: { on: 'On', off: 'Off' },
     languages: { en: 'English', 'pt-BR': 'Português' },
@@ -109,6 +111,7 @@ const MESSAGES: Record<Language, Messages> = {
     metricNames: { context: 'Contexto', session: 'Sessão', weekly: 'Semanal', dailyBudget: 'Meta diária' },
     rows: { language: 'Idioma', chart: 'Gráfico', percent: 'Percentual', resetTime: 'Horário de reset', labels: 'Rótulos', colors: 'Cores', weekends: 'Fins de semana' },
     charts: { none: 'Número', bar: 'Barra', dots: 'Pontos', level: 'Nível', pie: 'Pizza' },
+    pieHint: 'Requer uma fonte com ◔ ◑ ◕, como Cascadia Mono',
     labelModes: { always: 'Mostrar', hover: 'Ao passar o mouse', never: 'Ocultar' },
     colorModes: { on: 'Ligadas', off: 'Desligadas' },
     languages: { en: 'English', 'pt-BR': 'Português' },
@@ -525,8 +528,12 @@ export const register: Register = on => {
         ], visibility)
       }
       return section(messages.metricNames[id], [
-        row(messages.rows.chart, CHART_STYLES.map(chart =>
-          choice(`${id}-chart-${chart}`, messages.charts[chart], metric.chart === chart, setMetric(id, { chart })))),
+        row(messages.rows.chart, [
+          ...CHART_STYLES.map(chart =>
+            choice(`${id}-chart-${chart}`, messages.charts[chart], metric.chart === chart, setMetric(id, { chart }))),
+          // The mods API cannot tell which glyphs the terminal font has, and Consolas, Lucida Console and Courier New lack ◔ ◑ ◕.
+          metric.chart === 'pie' && <Text dimColor>{messages.pieHint}</Text>,
+        ]),
         switchRow(`${id}-percent`, messages.rows.percent, metric.showPercent, showPercent => setMetric(id, { showPercent })),
         ...(METRICS_WITH_RESET_TIME.includes(id)
           ? [switchRow(`${id}-reset`, messages.rows.resetTime, metric.showResetTime, showResetTime => setMetric(id, { showResetTime }))]
