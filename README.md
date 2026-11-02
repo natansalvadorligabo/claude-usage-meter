@@ -51,9 +51,7 @@ To try a local clone instead: `claude --plugin-dir /path/to/claude-usage-meter`.
 ## Develop
 
 ```sh
-claude plugin validate .
-claude plugin test .
-tsc -p .            # once Claude Code has loaded the mod and written .claude-plugin/types/
+sh scripts/check.sh   # validate, test, and tsc once Claude Code has loaded the mod and written .claude-plugin/types/
 ```
 
 ## Limitations
