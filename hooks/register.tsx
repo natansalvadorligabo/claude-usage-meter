@@ -40,8 +40,6 @@ const PACE_STYLES = {
 } as const
 const CLOSE_TO_BUDGET_RATIO = 0.8
 const UNCOLORED_BLOCK = '#d4d4d4'
-// Windows Terminal's Campbell scheme: a hover background in it keeps the Button's pointer inversion from showing.
-const TERMINAL_BACKGROUND = '#0c0c0c'
 const HOVER_LABEL = '#8a8a8a'
 const HOVER_SCOPE = 'usage-meter-section'
 const LEVEL_GLYPHS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█']
@@ -351,8 +349,9 @@ function describeUsageLine(settings: UsageMeterConfig, snapshot: UsageSnapshot, 
     .filter(item => item.segments.length > 0)
 }
 
-const EMPHASIS_HOVER: TextHoverProps = { bold: true, dimColor: false, inverse: false, backgroundColor: TERMINAL_BACKGROUND, scope: HOVER_SCOPE }
-const BUTTON_HOVER: TextHoverProps = { inverse: false, backgroundColor: TERMINAL_BACKGROUND, scope: HOVER_SCOPE }
+// `inverse: false` alone turns off the Button's pointer inversion: the hover overrides it. No background, so the terminal's own shows through on every theme (#7).
+const EMPHASIS_HOVER: TextHoverProps = { bold: true, dimColor: false, inverse: false, scope: HOVER_SCOPE }
+const BUTTON_HOVER: TextHoverProps = { inverse: false, scope: HOVER_SCOPE }
 
 function lineRuns(items: LineItem[], labels: LabelMode): SegmentRun[] {
   return items.flatMap((item, index): SegmentRun[] => {
