@@ -531,8 +531,8 @@ export const register: Register = on => {
         row(messages.rows.chart, [
           ...CHART_STYLES.map(chart =>
             choice(`${id}-chart-${chart}`, messages.charts[chart], metric.chart === chart, setMetric(id, { chart }))),
-          // The mods API cannot tell which glyphs the terminal font has, and Consolas, Lucida Console and Courier New lack ◔ ◑ ◕.
-          metric.chart === 'pie' && <Text dimColor>{messages.pieHint}</Text>,
+          // The mods API cannot tell which glyphs the terminal font has, so the pie explains its own boxes.
+          ...(metric.chart === 'pie' ? [<Text key={`${id}-pie-hint`} dimColor>{messages.pieHint}</Text>] : []),
         ]),
         switchRow(`${id}-percent`, messages.rows.percent, metric.showPercent, showPercent => setMetric(id, { showPercent })),
         ...(METRICS_WITH_RESET_TIME.includes(id)
