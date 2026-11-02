@@ -67,7 +67,7 @@ async function footerText($: Engine, surface: (typeof SURFACES)[number]): Promis
 }
 
 async function pieHints(pane: Mounted<(typeof SURFACES)[number], 'Pane'>): Promise<string[]> {
-  const hints = await pane.findAll({ type: 'Text', text: /◔ ◑ ◕/ })
+  const hints = await pane.findAll({ type: 'Text', text: /Cascadia Mono/ })
   return hints.map(hint => hint.text)
 }
 
@@ -380,10 +380,10 @@ test('picking the pie warns, in the pane language, that it needs a font with the
     expect(await pieHints(pane)).toEqual([])
 
     await pane.press({ key: 'weekly-chart-pie' })
-    expect(await pieHints(pane)).toEqual(['Needs a font with ◔ ◑ ◕, such as Cascadia Mono'])
+    expect(await pieHints(pane)).toEqual(['Needs a font with pie glyphs, such as Cascadia Mono'])
 
     await pane.press({ key: 'language-pt-BR' })
-    expect(await pieHints(pane)).toEqual(['Requer uma fonte com ◔ ◑ ◕, como Cascadia Mono'])
+    expect(await pieHints(pane)).toEqual(['Requer uma fonte com os glifos da pizza, como Cascadia Mono'])
 
     await pane.press({ key: 'weekly-chart-bar' })
     expect(await pieHints(pane)).toEqual([])
