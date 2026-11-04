@@ -35,6 +35,9 @@ The usage limits belong to the whole account, but each terminal only hears about
 Every terminal writes its newest reading to `~/.claude/usage-meter/latest-limits.json` (under `CLAUDE_CONFIG_DIR` when set),
 and the others pick it up within 10 seconds. No extra API calls are made.
 
+Settings changed in one terminal show in every other open terminal at once: each change is also written to
+`~/.claude/usage-meter/latest-settings.json`, which every terminal watches.
+
 ## Install
 
 Requirements: **Claude Code 2.1.29x or newer** (the mod uses the function hooks API, a `hooks.json` module that runs inside Claude Code).

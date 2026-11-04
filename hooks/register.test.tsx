@@ -28,12 +28,15 @@ function answerEngine(on: On, opened: string[] = []) {
   const clock = mock.clock(on, { now: Date.now() })
   on('env.get', (_, e) => ({ value: e.name === 'HOME' ? '/home/tester' : undefined }))
   on('fs.read', (_, e) => ({ value: files.get(e.path) ?? '' }))
+  on('fs.exists', (_, e) => ({ value: files.has(e.path) }))
   on('fs.write', (_, e) => {
     files.set(e.path, e.text)
     return { value: undefined }
   })
   on('session.usage', () => ({ value: { context: { window: 200000, tokens: 84000, percent: 42 }, rateLimits: [], startedAt: Date.now() } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('classic.SessionStart', () => ({}))
+  on('classic.FileChanged', () => ({}))
   on('command.register', (_, e) => ({ value: { command: e.name } }))
   on('session.measure', (_, e) => ({ changed: e.changed }))
   on('ui.open', (_, e) => {
@@ -421,4 +424,67 @@ test('hovering the footer keeps the terminal background and never inverts', asyn
       expect(hover.inverse).toBe(false)
     }
   }
+})
+
+const METRIC = { isVisible: true, chart: 'none', showPercent: true, showResetTime: true }
+
+function settingsWithSessionChart(chart: string) {
+  return {
+    language: 'en', labels: 'never', colors: 'on', countWeekends: true,
+    metrics: { context: METRIC, session: { ...METRIC, chart }, weekly: METRIC, dailyBudget: METRIC },
+  }
+}
+
+// The path the mod wrote the shared settings under, as the engine resolved it.
+function sharedSettingsEntry(files: Map<string, string>): [string, string] | undefined {
+  return [...files.entries()].find(([path]) => path.endsWith('latest-settings.json'))
+}
+
+test('a chart picked in another terminal shows here as soon as that terminal saves it', async ($, on) => {
+  const { files } = answerEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await measureWeekly($, 40, inCalendarDays(2))
+  const { watchPaths = [] } = await $.classic.SessionStart({ source: 'startup' })
+  expect(watchPaths.some(path => path.endsWith('/home/tester/.claude/usage-meter/latest-settings.json'))).toBe(true)
+
+  const [written = ''] = sharedSettingsEntry(files) ?? []
+  files.set(written, JSON.stringify(settingsWithSessionChart('bar')))
+  // On Windows the engine reports the change as `C:\Users\…` even for a HOME spelled `/c/Users/…`.
+  await $.classic.FileChanged({ file_path: written.replaceAll('/', '\\').toUpperCase(), event: 'change' })
+
+  expect(await footerText($, 'terminal')).toMatch(/█+░+ 72%/)
+})
+
+test('a terminal opened after a change elsewhere starts with that change', async ($, on) => {
+  const { files } = answerEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.classic.SessionStart({ source: 'startup' })
+  const [written = ''] = sharedSettingsEntry(files) ?? []
+  // Another terminal saved bars to the shared file; this one's store was left behind by a race.
+  files.set(written, JSON.stringify(settingsWithSessionChart('bar')))
+
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await measureWeekly($, 40, inCalendarDays(2))
+  expect(await footerText($, 'terminal')).toMatch(/█+░+ 72%/)
+})
+
+test('a chart picked in the pane is published for the other terminals', async ($, on) => {
+  const { files } = answerEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  const pane = await $.ui.mount({ plugin: 'usage-meter', surface: 'terminal', component: 'Pane', requestId: PANE_ID, props: PANE_PROPS })
+  await pane.press({ key: 'session-chart-bar' })
+  await pane.unmount()
+
+  const [path = '', text = '{}'] = sharedSettingsEntry(files) ?? []
+  expect(path.replaceAll('\\', '/')).toMatch(/\/home\/tester\/\.claude\/usage-meter\/latest-settings\.json$/)
+  expect(JSON.parse(text).metrics.session.chart).toBe('bar')
+})
+
+test('a new install creates the watched settings file, so its first change is heard', async ($, on) => {
+  const { files } = answerEngine(on)
+  await $.session.start({ cwd: '/work', surface: 'terminal', isInteractive: true })
+  await $.classic.SessionStart({ source: 'startup' })
+
+  const [, text = '{}'] = sharedSettingsEntry(files) ?? []
+  expect(JSON.parse(text).metrics?.session?.chart).toBe('none')
 })

@@ -19,6 +19,8 @@ const PANE = 'usage-meter-settings'
 const SETTINGS_KEY = 'settings.v2'
 const BASELINE_KEY = 'dayBaseline'
 const SHARED_LIMITS_FILE = 'usage-meter/latest-limits.json'
+// Watched by every terminal, so a settings change made in one redraws the others at once.
+const SHARED_SETTINGS_FILE = 'usage-meter/latest-settings.json'
 // Every terminal reports the account's limits only after its own responses, so the newest reading is passed through a local file.
 const SHARED_LIMITS_SYNC_MS = 10_000
 const SEPARATOR = ' · '
@@ -181,11 +183,38 @@ function toSnapshot(context: SessionContextUsage, rateLimits: SessionRateLimit[]
   }
 }
 
-async function sharedLimitsPath($: EngineInterface): Promise<string | undefined> {
+async function sharedPath($: EngineInterface, file: string): Promise<string | undefined> {
   const configDir = await $.env.get('CLAUDE_CONFIG_DIR')
-  if (configDir) return `${configDir}/${SHARED_LIMITS_FILE}`
+  if (configDir) return `${configDir}/${file}`
   const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
-  return home ? `${home}/.claude/${SHARED_LIMITS_FILE}` : undefined
+  return home ? `${home}/.claude/${file}` : undefined
+}
+
+function sharedLimitsPath($: EngineInterface): Promise<string | undefined> {
+  return sharedPath($, SHARED_LIMITS_FILE)
+}
+
+function sharedSettingsPath($: EngineInterface): Promise<string | undefined> {
+  return sharedPath($, SHARED_SETTINGS_FILE)
+}
+
+// By its ending alone: the engine may spell the watched path otherwise (`C:\Users\…` for a HOME of `/c/Users/…`).
+function isSharedSettingsFile(path: string): boolean {
+  return path.replaceAll('\\', '/').toLowerCase().endsWith(`/${SHARED_SETTINGS_FILE}`)
+}
+
+// The shared file is what every terminal shows, as each writes it last; when two save at once, the store
+// may keep the other one's choice. So the file wins, and the store answers only when the file is missing or torn.
+async function loadSettings($: EngineInterface): Promise<UsageMeterConfig> {
+  const path = await sharedSettingsPath($)
+  if (path) {
+    try {
+      return mergeWithDefaults(JSON.parse(String(await $.fs.read(path))))
+    } catch {
+      // Missing, unreadable or half-written: the store holds this terminal's last saved choice.
+    }
+  }
+  return mergeWithDefaults(await $.store.get(SETTINGS_KEY))
 }
 
 // Several terminals write this file: a writer never replaces a newer reading, and a torn or half-written file reads as absent.
@@ -376,19 +405,38 @@ function withMetric(current: UsageMeterConfig, id: MetricId, change: Partial<Met
 
 // Every open terminal writes the same settings: a change applies to the saved ones, so it never undoes another terminal's choice (#1).
 async function changeConfig($: EngineInterface, change: (current: UsageMeterConfig) => UsageMeterConfig) {
-  const changed = change(mergeWithDefaults(await $.store.get(SETTINGS_KEY)))
+  const changed = change(await loadSettings($))
   // Saved first, so a refused write never leaves the footer showing a choice that was not kept.
   await $.store.set(SETTINGS_KEY, changed)
   await update($, config, () => changed)
+  await publishSettings($, changed)
+}
+
+// The other terminals watch this file and redraw from it at once.
+async function publishSettings($: EngineInterface, settings: UsageMeterConfig) {
+  const path = await sharedSettingsPath($)
+  // A refused write leaves the other terminals as they were; this one and its store still hold the change.
+  if (path) await $.fs.write(path, JSON.stringify(settings)).catch(() => undefined)
+}
+
+// Another terminal saved new settings. Read when the queue reaches it, so it is always the newest file.
+async function adoptSharedSettings($: EngineInterface) {
+  const shared = await loadSettings($)
+  await update($, config, () => shared)
 }
 
 // Module state despite the no-globals rule: the host lets a hook pass $ only to functions declared at the top of the file.
-let pendingConfigChanges: Promise<void> = Promise.resolve()
+let pendingSettingsWork: Promise<void> = Promise.resolve()
 
-// Two quick presses must not read the same saved settings, so this terminal saves its changes one at a time.
+// Two quick presses must not read the same saved settings, so this terminal saves its changes one at a time,
+// and takes another terminal's change only between its own.
+function queueSettingsWork(work: () => Promise<void>): Promise<void> {
+  pendingSettingsWork = pendingSettingsWork.catch(() => undefined).then(work)
+  return pendingSettingsWork
+}
+
 function queueConfigChange($: EngineInterface, change: (current: UsageMeterConfig) => UsageMeterConfig): Promise<void> {
-  pendingConfigChanges = pendingConfigChanges.catch(() => undefined).then(() => changeConfig($, change))
-  return pendingConfigChanges
+  return queueSettingsWork(() => changeConfig($, change))
 }
 
 async function recordUsage($: EngineInterface, change: (current: UsageSnapshot) => UsageSnapshot) {
@@ -409,7 +457,7 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     await update($, config, () => DEFAULT_CONFIG)
-    const settings = mergeWithDefaults(await $.store.get(SETTINGS_KEY))
+    const settings = await loadSettings($)
     await update($, config, () => settings)
     const current = await $.session.usage()
     await recordUsage($, () => toSnapshot(current.context, current.rateLimits, 0))
@@ -442,6 +490,21 @@ export const register: Register = on => {
       : {}
     await recordUsage($, current => ({ ...current, context }))
     return compaction
+  })
+
+  on('classic.SessionStart', async ($, e, next) => {
+    const started = await next(e)
+    const path = await sharedSettingsPath($)
+    if (!path) return started
+    // A watch on a file that does not exist yet may never hear its first write, so a new install creates it;
+    // a failed check counts as missing, since writing it again only repeats what this terminal shows.
+    if (!(await $.fs.exists(path).catch(() => false))) await publishSettings($, await loadSettings($))
+    return { ...started, watchPaths: [...(started.watchPaths ?? []), path] }
+  })
+
+  on('classic.FileChanged', async ($, e, next) => {
+    if (e.event !== 'unlink' && isSharedSettingsFile(e.file_path)) await queueSettingsWork(() => adoptSharedSettings($))
+    return next(e)
   })
 
   on('command.run', { command: 'usage-meter' }, async $ => {
