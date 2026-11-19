@@ -21,6 +21,7 @@ export type UsageMeterConfig = {
 
 export type UsageReading = {
   percent?: number
+  tokens?: number
   resetsAt?: string
 }
 

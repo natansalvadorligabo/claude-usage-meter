@@ -9,7 +9,7 @@ footer row, plus a daily budget that tells you whether today's pace fits what is
 
 | Metric       | What it is                                                                                      |
 | ------------ | ----------------------------------------------------------------------------------------------- |
-| Context      | How full the model's context window is. Its colors turn orange at 50%, where compaction usually gets close. |
+| Context      | How full the model's context window is. Its colors turn orange at 50%, where compaction usually gets close, and red from 150k tokens on any window size, when it is time to compact or start a new session. |
 | Session      | The 5-hour usage limit, with the time it resets.                                                |
 | Weekly       | The 7-day usage limit, with the day and hour it resets.                                         |
 | Daily budget | Weekly % spent today against today's share: `(100 − weekly % at the start of the day) / days until the reset`. |

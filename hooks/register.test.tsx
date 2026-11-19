@@ -488,3 +488,29 @@ test('a new install creates the watched settings file, so its first change is he
   const [, text = '{}'] = sharedSettingsEntry(files) ?? []
   expect(JSON.parse(text).metrics?.session?.chart).toBe('none')
 })
+
+test('on a 1M window the context turns red from 150k tokens though its percent is low', async ($, on) => {
+  answerEngine(on)
+  const contextColor = async (tokens: number) => {
+    const percent = Math.round(tokens / 10000)
+    await $.session.measure({ context: { window: 1000000, tokens, percent }, rateLimits: [], changed: ['context'] })
+    const footer = await $.ui.mount({ plugin: 'usage-meter', surface: 'terminal', component: 'SessionMode', props: { modes: [] } })
+    const found = await footer.findAll({ type: 'Text', text: `${percent}%` })
+    await footer.unmount()
+    return found[0]?.props?.color
+  }
+
+  expect(await contextColor(40000)).toBe('#22c55e')
+  expect(await contextColor(100000)).toBe('#facc15')
+  expect(await contextColor(150000)).toBe('#ef4444')
+})
+
+test('on a 200k window the percent scale still decides when it is more severe', async ($, on) => {
+  answerEngine(on)
+  await $.session.measure({ context: { window: 200000, tokens: 130000, percent: 65 }, rateLimits: [], changed: ['context'] })
+
+  const footer = await $.ui.mount({ plugin: 'usage-meter', surface: 'terminal', component: 'SessionMode', props: { modes: [] } })
+  const found = await footer.findAll({ type: 'Text', text: '65%' })
+  expect(found[0]?.props?.color).toBe('#ef4444')
+  await footer.unmount()
+})

@@ -34,6 +34,10 @@ const RED = '#ef4444'
 const LIMIT_COLOR_STOPS: [number, string][] = [[0, GREEN], [25, LIME], [50, YELLOW], [65, ORANGE], [80, RED]]
 // The context is usually swapped or compacted between 50% and 60%, so its scale turns orange at 50%.
 const CONTEXT_COLOR_STOPS: [number, string][] = [[0, GREEN], [30, LIME], [40, YELLOW], [50, ORANGE], [65, RED]]
+// Past about 150k tokens a session is due for compaction or a fresh start whatever the window size, so on large windows
+// the context also follows this token scale and shows whichever of the two colors is more severe.
+const CONTEXT_TOKEN_COLOR_STOPS: [number, string][] = [[0, GREEN], [70_000, LIME], [90_000, YELLOW], [115_000, ORANGE], [150_000, RED]]
+const SEVERITY = [GREEN, LIME, YELLOW, ORANGE, RED]
 // Pace colors stay outside the green-to-red usage scale so the daily tip is never read as a usage level.
 const PACE_STYLES = {
   onTrack: { icon: '✓', color: '#38bdf8' },
@@ -176,7 +180,7 @@ function toSnapshot(context: SessionContextUsage, rateLimits: SessionRateLimit[]
     return limit ? { percent: limit.percentUsed, resetsAt: limit.resetsAt } : {}
   }
   return {
-    context: { percent: context.percent },
+    context: { percent: context.percent, tokens: context.tokens },
     session: readLimit('five_hour'),
     weekly: readLimit('seven_day'),
     limitsMeasuredAt,
@@ -316,9 +320,14 @@ function pickStepColor(percent: number, colorStops: [number, string][]): string 
   return color
 }
 
-function colorFor(id: MetricId, percent: number, mode: ColorMode): string | undefined {
-  if (mode === 'off') return undefined
-  return pickStepColor(percent, id === 'context' ? CONTEXT_COLOR_STOPS : LIMIT_COLOR_STOPS)
+function colorFor(id: MetricId, reading: UsageReading, mode: ColorMode): string | undefined {
+  const { percent, tokens } = reading
+  if (mode === 'off' || typeof percent !== 'number') return undefined
+  if (id !== 'context') return pickStepColor(percent, LIMIT_COLOR_STOPS)
+  const byPercent = pickStepColor(percent, CONTEXT_COLOR_STOPS)
+  if (typeof tokens !== 'number') return byPercent
+  const byTokens = pickStepColor(tokens, CONTEXT_TOKEN_COLOR_STOPS)
+  return SEVERITY.indexOf(byTokens) > SEVERITY.indexOf(byPercent) ? byTokens : byPercent
 }
 
 function renderChart(percent: number, chart: ChartStyle): { filled: string; empty: string } {
@@ -350,7 +359,7 @@ function buildUsageSegments(id: MetricId, reading: UsageReading, settings: Usage
   const { percent, resetsAt } = reading
   if (typeof percent !== 'number') return []
   const metric = settings.metrics[id]
-  const color = colorFor(id, percent, settings.colors)
+  const color = colorFor(id, reading, settings.colors)
   const { filled, empty } = renderChart(percent, metric.chart)
   const hasChart = filled.length + empty.length > 0
   const segments: Segment[] = []
@@ -469,7 +478,7 @@ export const register: Register = on => {
 
   on('session.measure', async ($, e, next) => {
     if (!e.changed.includes('rateLimits') || e.rateLimits.length === 0) {
-      await recordUsage($, current => ({ ...current, context: { percent: e.context.percent } }))
+      await recordUsage($, current => ({ ...current, context: { percent: e.context.percent, tokens: e.context.tokens } }))
       return next(e)
     }
     const snapshot = toSnapshot(e.context, e.rateLimits, await $.clock.now())
@@ -486,7 +495,7 @@ export const register: Register = on => {
     const { tokensAfter } = compaction
     const { window } = (await $.session.usage()).context
     const context: UsageReading = typeof tokensAfter === 'number' && window > 0
-      ? { percent: Math.min(100, Math.round((tokensAfter / window) * 100)) }
+      ? { percent: Math.min(100, Math.round((tokensAfter / window) * 100)), tokens: tokensAfter }
       : {}
     await recordUsage($, current => ({ ...current, context }))
     return compaction
