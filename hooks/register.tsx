@@ -34,9 +34,9 @@ const RED = '#ef4444'
 const LIMIT_COLOR_STOPS: [number, string][] = [[0, GREEN], [25, LIME], [50, YELLOW], [65, ORANGE], [80, RED]]
 // The context is usually swapped or compacted between 50% and 60%, so its scale turns orange at 50%.
 const CONTEXT_COLOR_STOPS: [number, string][] = [[0, GREEN], [30, LIME], [40, YELLOW], [50, ORANGE], [65, RED]]
-// Past about 150k tokens a session is due for compaction or a fresh start whatever the window size, so on large windows
-// the context also follows this token scale and shows whichever of the two colors is more severe.
-const CONTEXT_TOKEN_COLOR_STOPS: [number, string][] = [[0, GREEN], [70_000, LIME], [90_000, YELLOW], [115_000, ORANGE], [150_000, RED]]
+// From about 150k tokens a session is due for compaction and past 200k for a fresh start, whatever the window size,
+// so on large windows the context also follows this token scale and shows whichever of the two colors is more severe.
+const CONTEXT_TOKEN_COLOR_STOPS: [number, string][] = [[0, GREEN], [90_000, LIME], [120_000, YELLOW], [150_000, ORANGE], [200_000, RED]]
 const SEVERITY = [GREEN, LIME, YELLOW, ORANGE, RED]
 // Pace colors stay outside the green-to-red usage scale so the daily tip is never read as a usage level.
 const PACE_STYLES = {

@@ -489,7 +489,7 @@ test('a new install creates the watched settings file, so its first change is he
   expect(JSON.parse(text).metrics?.session?.chart).toBe('none')
 })
 
-test('on a 1M window the context turns red from 150k tokens though its percent is low', async ($, on) => {
+test('on a 1M window the context turns orange from 150k tokens and red from 200k though its percent is low', async ($, on) => {
   answerEngine(on)
   const contextColor = async (tokens: number) => {
     const percent = Math.round(tokens / 10000)
@@ -501,8 +501,10 @@ test('on a 1M window the context turns red from 150k tokens though its percent i
   }
 
   expect(await contextColor(40000)).toBe('#22c55e')
-  expect(await contextColor(100000)).toBe('#facc15')
-  expect(await contextColor(150000)).toBe('#ef4444')
+  expect(await contextColor(100000)).toBe('#a3e635')
+  expect(await contextColor(130000)).toBe('#facc15')
+  expect(await contextColor(150000)).toBe('#fb923c')
+  expect(await contextColor(200000)).toBe('#ef4444')
 })
 
 test('on a 200k window the percent scale still decides when it is more severe', async ($, on) => {
